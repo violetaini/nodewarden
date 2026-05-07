@@ -61,10 +61,42 @@ async function ensureDatabaseInitialized(env: Env): Promise<void> {
 
   await dbInitPromise;
 }
+function checkEdgeSecret(request: Request, env: Env): Response | null {
+  const expected = String(env.EDGE_SECRET || '').trim();
 
+  if (!expected) {
+    return new Response('EDGE_SECRET not configured', {
+      status: 500,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
+  const actual = String(request.headers.get('X-Edge-Secret') || '').trim();
+
+  if (actual !== expected) {
+    return new Response('Forbidden', {
+      status: 403,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
+  return null;
+}
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     void ctx;
+
+    const edgeSecretBlock = checkEdgeSecret(request, env);
+    if (edgeSecretBlock) {
+      return edgeSecretBlock;
+    }
+
     const normalizedRequest = normalizeRequestUrl(request);
     const assetResponse = await maybeServeAsset(normalizedRequest, env);
     if (assetResponse) {
