@@ -2,7 +2,7 @@ name: Sync upstream
 
 on:
   schedule:
-    - cron: "25 15 * * *"
+    - cron: "15 16 * * *"
       timezone: "Asia/Shanghai"
   workflow_dispatch:
     inputs:
