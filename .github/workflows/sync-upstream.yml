@@ -103,6 +103,7 @@ jobs:
           # Always keep local automation files to avoid workflow permission issues.
           git restore --source=HEAD --staged --worktree .github/workflows
           git restore --source=HEAD --staged --worktree .github/scripts/apply-local-overrides.mjs
+          git restore --source=HEAD --staged --worktree .github/scripts/verify-local-overrides.mjs
 
           # On conflict, take upstream versions for locally customized app files,
           # then re-apply our small local overrides in the next step.
@@ -118,6 +119,11 @@ jobs:
         run: |
           node .github/scripts/apply-local-overrides.mjs
           git add src/index.ts src/types/index.ts wrangler.toml
+
+      - name: Verify local overrides
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          node .github/scripts/verify-local-overrides.mjs
 
       - name: Validate merge state
         if: steps.check.outputs.needs_update == 'true'
@@ -151,6 +157,7 @@ jobs:
             echo "- **Mode:** ${{ steps.resolve.outputs.mode }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Tag:** ${{ steps.resolve.outputs.latest_tag || 'N/A (manual)' }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Commit:** \`${{ steps.resolve.outputs.target_sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Local overrides:** verified" >> $GITHUB_STEP_SUMMARY
           else
             echo "### Nothing to update" >> $GITHUB_STEP_SUMMARY
           fi
