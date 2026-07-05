@@ -1,5 +1,4 @@
 import { LIMITS } from './config/limits';
-import { DEFAULT_DEV_SECRET } from './types';
 import {
   handleAccessSend,
   handleAccessSendFile,
@@ -8,6 +7,7 @@ import {
   handleDownloadSendFile,
 } from './handlers/sends';
 import { handleKnownDevice } from './handlers/devices';
+import { handleFillAssistForms, handleFillAssistManifest } from './handlers/fill-assist';
 import { handleToken, handlePrelogin, handleRevocation } from './handlers/identity';
 import { handleGetAccountPasskeyAssertionOptions } from './handlers/account-passkeys';
 import {
@@ -33,7 +33,7 @@ import { StorageService } from './services/storage';
 import type { Env } from './types';
 
 type PublicRateLimiter = (category?: string, maxRequests?: number) => Promise<Response | null>;
-type JwtUnsafeReason = 'missing' | 'default' | 'too_short' | null;
+type JwtUnsafeReason = 'missing' | 'too_short' | null;
 
 export interface WebBootstrapResponse {
   defaultKdfIterations: number;
@@ -97,6 +97,7 @@ function buildIconServiceCsp(origin: string): string {
 }
 
 function buildConfigResponse(origin: string) {
+  const fillAssistBase = `${origin}/fill-assist`;
   return {
     version: LIMITS.compatibility.bitwardenServerVersion,
     gitHash: 'nodewarden',
@@ -109,7 +110,7 @@ function buildConfigResponse(origin: string) {
       notifications: origin + '/notifications',
       icons: origin,
       sso: '',
-      fillAssistRules: null,
+      fillAssistRules: fillAssistBase,
     },
     push: {
       pushTechnology: 0,
@@ -125,8 +126,11 @@ function buildConfigResponse(origin: string) {
       'cipher-key-encryption': LIMITS.compatibility.cipherKeyEncryptionFeatureEnabled,
       'duo-redirect': true,
       'email-verification': true,
+      'fill-assist-targeting-rules': true,
       'pm-19051-send-email-verification': false,
       'pm-19148-innovation-archive': true,
+      'pm-4516-devices-add-last-activity-date': true,
+      'pm-30529-webauthn-related-origins': true,
       'unauth-ui-refresh': true,
       'web-push': false,
     },
@@ -303,9 +307,7 @@ export async function buildWebBootstrapResponse(env: Env): Promise<WebBootstrapR
   const jwtUnsafeReason =
     !secret
       ? 'missing'
-      : secret === DEFAULT_DEV_SECRET
-        ? 'default'
-        : secret.length < LIMITS.auth.jwtSecretMinLength
+      : secret.length < LIMITS.auth.jwtSecretMinLength
           ? 'too_short'
           : null;
   const storage = new StorageService(env.DB);
@@ -340,6 +342,19 @@ export async function handlePublicRoute(
     const blocked = await enforcePublicRateLimit('public-read', LIMITS.rateLimit.publicReadRequestsPerMinute);
     if (blocked) return blocked;
     return jsonResponse(await buildWebBootstrapResponse(env));
+  }
+
+  if (path === '/fill-assist/manifest.json' && method === 'GET') {
+    const blocked = await enforcePublicRateLimit('public-read', LIMITS.rateLimit.publicReadRequestsPerMinute);
+    if (blocked) return blocked;
+    return handleFillAssistManifest();
+  }
+
+  const fillAssistFormsMatch = path.match(/^\/fill-assist\/([^/]+)$/i);
+  if (fillAssistFormsMatch && method === 'GET') {
+    const blocked = await enforcePublicRateLimit('public-read', LIMITS.rateLimit.publicReadRequestsPerMinute);
+    if (blocked) return blocked;
+    return handleFillAssistForms(fillAssistFormsMatch[1]);
   }
 
   const iconMatch = path.match(/^\/icons\/([^/]+)\/icon\.png$/i);
@@ -469,7 +484,7 @@ export async function handlePublicRoute(
     const blocked = await enforcePublicRateLimit('public-read', LIMITS.rateLimit.publicReadRequestsPerMinute);
     if (blocked) return blocked;
     const origin = new URL(request.url).origin;
-    return jsonResponse(buildConfigResponse(origin));
+    return jsonResponse(buildConfigResponse(origin), 200, { 'Cache-Control': 'no-store' });
   }
 
   if (path === '/api/version' && method === 'GET') {
