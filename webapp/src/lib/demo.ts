@@ -790,6 +790,7 @@ export function createDemoInitialBootstrapState(): InitialAppBootstrapState {
   return {
     defaultKdfIterations: 600000,
     registrationInviteRequired: true,
+    websiteIconsEnabled: true,
     jwtWarning: null,
     session: null,
     phase: 'login',
@@ -1200,7 +1201,7 @@ export function createDemoMainRoutesProps(base: AppMainRoutesProps, notify: Noti
     onDownloadRemoteBackup: async (_masterPassword: string, _destinationId: string, _path: string, _onProgress?: (percent: number | null) => void) => {
       notify('success', t('txt_demo_download_prepared'));
     },
-    onInspectRemoteBackup: async (_destinationId: string, path: string) => ({
+    onInspectRemoteBackup: async (_masterPassword: string, _destinationId: string, path: string) => ({
       object: 'backup-remote-integrity',
       destinationId: _destinationId,
       path,
