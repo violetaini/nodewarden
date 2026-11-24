@@ -101,9 +101,18 @@ jobs:
         if: steps.check.outputs.needs_update == 'true'
         run: |
           # Always keep local automation files to avoid workflow permission issues.
-          git restore --source=HEAD --staged --worktree .github/workflows
-          git restore --source=HEAD --staged --worktree .github/scripts/apply-local-overrides.mjs
-          git restore --source=HEAD --staged --worktree .github/scripts/verify-local-overrides.mjs
+          # First resolve any unmerged conflicts in .github (e.g. upstream added or deleted workflows)
+          for file in $(git diff --name-only --diff-filter=U -- .github || true); do
+            if git ls-tree -r --name-only HEAD | grep -Fxq "$file"; then
+              git checkout HEAD -- "$file"
+              git add "$file"
+            else
+              git rm -f --ignore-unmatch "$file" 2>/dev/null || rm -f "$file"
+            fi
+          done
+
+          git checkout HEAD -- .github/workflows .github/scripts 2>/dev/null || true
+          git clean -fd .github/workflows 2>/dev/null || true
 
           # On conflict, take upstream versions for locally customized app files,
           # then re-apply our small local overrides in the next step.
